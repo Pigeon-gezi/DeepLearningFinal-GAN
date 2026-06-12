@@ -1,0 +1,17 @@
+# PyTorch 生态（CUDA 13.0）
+torch>=2.0.0
+torchvision>=0.15.0
+
+# 数值计算
+numpy>=1.24.0
+scipy>=1.10.0
+
+# 图像处理
+Pillow>=9.0.0
+
+# 可视化
+matplotlib>=3.5.0
+seaborn>=0.12.0
+
+# 测试（可选）
+pytest>=7.0.0
