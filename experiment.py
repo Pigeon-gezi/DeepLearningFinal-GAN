@@ -62,7 +62,7 @@ class FaceGANExperiment:
                 image_channels=self.config.image_channels,
                 base_features=self.config.dcgan_d_features,
                 image_size=self.config.image_size,
-                use_spectral_norm=True,
+                use_spectral_norm=False,  # GP + drift 已足够约束，谱归一化是过度约束
                 use_minibatch_std=True,
             )
             return generator, discriminator, "StyleGAN-lite + WGAN-GP", "wgan-gp"
