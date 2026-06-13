@@ -54,7 +54,7 @@ class Config:
         self.improved_beta2 = 0.99
         self.n_critic = 5
         self.lambda_gp = 5.0
-        self.drift_weight = 2e-3  # 小数据集需要更强 drift 防止 D 过拟合
+        self.drift_weight = 1e-1  # 无 SN 时需较强 drift 约束 D(real)
         self.feature_matching_weight = 0.5
         self.ema_decay = 0.999
         self.use_label_smoothing = True
