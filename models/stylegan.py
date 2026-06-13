@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
-"""轻量 StyleGAN 组件：PixelNorm, EqualLinear, MappingNetwork, AdaIN,
-NoiseInjection, StyledConvBlock, StyleGANLiteGenerator。"""
+"""轻量 StyleGAN 组件：PixelNorm, EqualLinear, EqualConv2d, MappingNetwork,
+AdaIN, NoiseInjection, StyledConvBlock, StyleGANLiteGenerator。"""
 
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from models.common import init_weights_dcgan
 
 
 class PixelNorm(nn.Module):
@@ -29,6 +27,30 @@ class EqualLinear(nn.Module):
 
     def forward(self, x):
         return F.linear(x, self.weight * self.scale, self.bias * self.lr_mul)
+
+
+class EqualConv2d(nn.Module):
+    """等学习率卷积 — StyleGAN 核心组件，确保不同分辨率层学习率一致。"""
+
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        super(EqualConv2d, self).__init__()
+        fan_in = kernel_size * kernel_size * in_channels
+        self.scale = 1.0 / math.sqrt(fan_in)
+        self.weight = nn.Parameter(
+            torch.randn(out_channels, in_channels, kernel_size, kernel_size)
+        )
+        self.bias = nn.Parameter(torch.zeros(out_channels))
+        self.stride = stride
+        self.padding = padding
+
+    def forward(self, x):
+        return F.conv2d(
+            x,
+            self.weight * self.scale,
+            self.bias,
+            stride=self.stride,
+            padding=self.padding,
+        )
 
 
 class MappingNetwork(nn.Module):
@@ -82,10 +104,10 @@ class StyledConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, w_dim, upsample=False):
         super(StyledConvBlock, self).__init__()
         self.upsample = upsample
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, 1, 1)
+        self.conv1 = EqualConv2d(in_channels, out_channels, 3, 1, 1)
         self.noise1 = NoiseInjection(out_channels)
         self.adain1 = AdaIN(out_channels, w_dim)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, 1, 1)
+        self.conv2 = EqualConv2d(out_channels, out_channels, 3, 1, 1)
         self.noise2 = NoiseInjection(out_channels)
         self.adain2 = AdaIN(out_channels, w_dim)
         self.activation = nn.LeakyReLU(0.2, inplace=True)
@@ -149,11 +171,9 @@ class StyleGANLiteGenerator(nn.Module):
             in_channels = out_channels
         self.blocks = nn.ModuleList(blocks)
         self.to_rgb = nn.Sequential(
-            nn.Conv2d(in_channels, image_channels, 1, 1, 0),
+            EqualConv2d(in_channels, image_channels, 1, 1, 0),
             nn.Tanh(),
         )
-
-        self.apply(init_weights_dcgan)
 
     def forward(self, z, return_w=False):
         if z.dim() > 2:

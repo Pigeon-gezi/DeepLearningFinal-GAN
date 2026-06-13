@@ -67,6 +67,24 @@ def parse_args():
     parser.add_argument(
         "--use_diff_augment", action="store_true", help="启用轻量DiffAugment"
     )
+    parser.add_argument(
+        "--n_critic",
+        type=int,
+        default=None,
+        help="WGAN-GP判别器每轮更新次数（默认5，降为1-2可缓解欠训练）",
+    )
+    parser.add_argument(
+        "--lr_g",
+        type=float,
+        default=None,
+        help="WGAN-GP生成器学习率（默认1e-4，太小会导致欠训练，建议2e-4）",
+    )
+    parser.add_argument(
+        "--drift_weight",
+        type=float,
+        default=None,
+        help="WGAN-GP drift惩罚权重（默认1e-1，小数据集判別器过强时可加大）",
+    )
     parser.add_argument("--seed", type=int, default=None, help="随机种子")
     return parser.parse_args()
 
@@ -92,6 +110,12 @@ def apply_args_to_config(config, args):
         config.metric_backend = args.metric_backend
     if args.use_diff_augment:
         config.use_diff_augment = True
+    if args.n_critic is not None:
+        config.n_critic = args.n_critic
+    if args.lr_g is not None:
+        config.improved_learning_rate_g = args.lr_g
+    if args.drift_weight is not None:
+        config.drift_weight = args.drift_weight
     if args.seed is not None:
         config.seed = args.seed
     return config

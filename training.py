@@ -107,7 +107,7 @@ class GANTrainer:
                 ema_buffer.copy_(buffer)
 
     def _prepare_for_discriminator(self, images):
-        if self.current_instance_noise > 0:
+        if self.loss_type != "wgan-gp" and self.current_instance_noise > 0:
             images = add_instance_noise(images, self.current_instance_noise)
         if self.config.use_diff_augment:
             images = diff_augment(images)
@@ -201,10 +201,7 @@ class GANTrainer:
         )
 
         d_loss.backward()
-        if self.config.grad_clip is not None:
-            torch.nn.utils.clip_grad_norm_(
-                self.discriminator.parameters(), self.config.grad_clip
-            )
+        # WGAN-GP 的 gradient penalty 已约束 Lipschitz，无需 clip
         self.optimizer_d.step()
 
         return (
@@ -239,10 +236,7 @@ class GANTrainer:
             g_loss = g_loss + self.config.feature_matching_weight * feature_matching
 
         g_loss.backward()
-        if self.config.grad_clip is not None:
-            torch.nn.utils.clip_grad_norm_(
-                self.generator.parameters(), self.config.grad_clip
-            )
+        # WGAN-GP 模式下跳过 grad_clip，让 GP 独立约束梯度
         self.optimizer_g.step()
         self.update_ema()
         diversity = fake_images.detach().std(dim=0).mean().item()
