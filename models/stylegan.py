@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.common import init_weights_dcgan, MinibatchStdDev
+from models.common import init_weights_dcgan
 
 
 class PixelNorm(nn.Module):
@@ -213,16 +213,14 @@ class WGANDiscriminator(nn.Module):
             next_channels = min(base_features * (2 ** (i + 1)), base_features * 16)
             blocks.append(
                 nn.Sequential(
-                    nn.Conv2d(current_channels, next_channels, 4, 2, 1, bias=False),
-                    nn.InstanceNorm2d(next_channels),
+                    nn.Conv2d(current_channels, next_channels, 4, 2, 1),
                     nn.LeakyReLU(0.2, inplace=True),
                 )
             )
             current_channels = next_channels
 
         self.blocks = nn.ModuleList(blocks)
-        self.minibatch_std = MinibatchStdDev()
-        self.final = nn.Conv2d(current_channels + 1, 1, 4, 1, 0)
+        self.final = nn.Conv2d(current_channels, 1, 4, 1, 0)
         self.apply(init_weights_dcgan)
 
     def forward(self, x, return_features=False):
@@ -230,7 +228,6 @@ class WGANDiscriminator(nn.Module):
         for block in self.blocks:
             x = block(x)
             features.append(x)
-        x = self.minibatch_std(x)
         logits = self.final(x).view(x.size(0), -1).mean(dim=1)
         if return_features:
             return logits, features

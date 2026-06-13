@@ -334,7 +334,7 @@ python main.py --mode train_improved \
 
 | 指标 | WGAN-GP 健康范围 | 异常信号 |
 |------|:---:|------|
-| D(real) | 2-5 | >8: drift 太小 |
+| D(real) | 2-5 | >8: drift 太小 **指正：D(real) 的绝对数值大小没有参考价值！！！** |
 | D(fake) | -5 ~ -1 | >0: 判別器太弱或 G 过强 |
 | GP | 0.05-0.3 | >1: λ_GP 太大或模型不稳定 |
 | Pixel_Diversity | >0.35 | <0.1: 模式崩溃 |

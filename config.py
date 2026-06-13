@@ -48,15 +48,15 @@ class Config:
         self.grad_clip = 10.0
 
         # Bonus/模式崩溃改进设置
-        self.improved_learning_rate_g = 2e-4  # 与判別器 lr 匹配，G 不会被碾压
+        self.improved_learning_rate_g = 2e-4
         self.improved_learning_rate_d = 1e-4
         self.improved_beta1 = 0.0  # WGAN-GP 原论文: β₁=0 for both G & D
-        self.improved_beta2 = 0.99
+        self.improved_beta2 = 0.9  # WGAN-GP 原论文
         self.n_critic = 5
         self.lambda_gp = 10.0  # WGAN-GP 原论文默认值，无 SN 时需足够约束
-        self.drift_weight = 1e-1  # 无 SN 时需较强 drift 约束 D(real)
-        self.feature_matching_weight = 0.5
-        self.ema_decay = 0.999
+        self.drift_weight = 0.0  # WGAN-GP 原论文无此参数，λ_gp=10 已足够约束
+        self.feature_matching_weight = 0.0
+        self.ema_decay = 0.99
         self.use_label_smoothing = True
         self.instance_noise_std = 0.03
         self.instance_noise_decay = 0.95
