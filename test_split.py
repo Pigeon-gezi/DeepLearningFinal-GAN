@@ -245,7 +245,7 @@ class TestTraining(unittest.TestCase):
 
     def test_trainer_wgan_gp(self):
         from config import Config
-        from models import StyleGANLiteGenerator, DCGANDiscriminator
+        from models import StyleGANLiteGenerator, WGANDiscriminator
         from training import GANTrainer
 
         cfg = Config()
@@ -253,9 +253,7 @@ class TestTraining(unittest.TestCase):
         g = StyleGANLiteGenerator(
             latent_dim=cfg.latent_dim, w_dim=128, image_size=cfg.image_size
         )
-        d = DCGANDiscriminator(
-            image_size=cfg.image_size, use_spectral_norm=True, use_minibatch_std=True
-        )
+        d = WGANDiscriminator(image_size=cfg.image_size)
         trainer = GANTrainer(g, d, cfg, model_name="Test_WGAN", loss_type="wgan-gp")
         self.assertEqual(trainer.loss_type, "wgan-gp")
         self.assertIsNotNone(trainer.generator_ema)

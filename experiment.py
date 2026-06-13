@@ -10,7 +10,12 @@ import torch
 
 from config import Config
 from data import FaceDataProcessor
-from models import DCGANGenerator, DCGANDiscriminator, StyleGANLiteGenerator
+from models import (
+    DCGANGenerator,
+    DCGANDiscriminator,
+    StyleGANLiteGenerator,
+    WGANDiscriminator,
+)
 from training import GANTrainer
 from metrics import Evaluator
 from utils import (
@@ -43,8 +48,6 @@ class FaceGANExperiment:
                 image_channels=self.config.image_channels,
                 base_features=self.config.dcgan_d_features,
                 image_size=self.config.image_size,
-                use_spectral_norm=False,
-                use_minibatch_std=False,
             )
             return generator, discriminator, "DCGAN", "bce"
 
@@ -58,12 +61,10 @@ class FaceGANExperiment:
                 max_channels=self.config.style_max_channels,
                 mapping_layers=self.config.style_mapping_layers,
             )
-            discriminator = DCGANDiscriminator(
+            discriminator = WGANDiscriminator(
                 image_channels=self.config.image_channels,
                 base_features=self.config.dcgan_d_features,
                 image_size=self.config.image_size,
-                use_spectral_norm=False,  # GP + drift 已足够约束，谱归一化是过度约束
-                use_minibatch_std=True,
             )
             return generator, discriminator, "StyleGAN-lite + WGAN-GP", "wgan-gp"
 

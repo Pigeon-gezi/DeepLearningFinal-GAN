@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from models.common import init_weights_dcgan, MinibatchStdDev
+
 
 class PixelNorm(nn.Module):
     def __init__(self, eps=1e-8):
@@ -186,3 +188,50 @@ class StyleGANLiteGenerator(nn.Module):
         if return_w:
             return image, w
         return image
+
+
+class WGANDiscriminator(nn.Module):
+    """WGAN-GP 判別器 — IN + MinibatchStd + 线性输出。"""
+
+    def __init__(self, image_channels=3, base_features=64, image_size=64):
+        super(WGANDiscriminator, self).__init__()
+        if image_size < 16 or image_size & (image_size - 1) != 0:
+            raise ValueError("image_size需要是>=16的2的幂，例如64或128")
+
+        num_downsamples = int(math.log2(image_size)) - 2
+        blocks = []
+        current_channels = base_features
+
+        blocks.append(
+            nn.Sequential(
+                nn.Conv2d(image_channels, current_channels, 4, 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+        )
+
+        for i in range(num_downsamples - 1):
+            next_channels = min(base_features * (2 ** (i + 1)), base_features * 16)
+            blocks.append(
+                nn.Sequential(
+                    nn.Conv2d(current_channels, next_channels, 4, 2, 1, bias=False),
+                    nn.InstanceNorm2d(next_channels),
+                    nn.LeakyReLU(0.2, inplace=True),
+                )
+            )
+            current_channels = next_channels
+
+        self.blocks = nn.ModuleList(blocks)
+        self.minibatch_std = MinibatchStdDev()
+        self.final = nn.Conv2d(current_channels + 1, 1, 4, 1, 0)
+        self.apply(init_weights_dcgan)
+
+    def forward(self, x, return_features=False):
+        features = []
+        for block in self.blocks:
+            x = block(x)
+            features.append(x)
+        x = self.minibatch_std(x)
+        logits = self.final(x).view(x.size(0), -1).mean(dim=1)
+        if return_features:
+            return logits, features
+        return logits
