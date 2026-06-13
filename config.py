@@ -50,7 +50,7 @@ class Config:
         # Bonus/模式崩溃改进设置
         self.improved_learning_rate_g = 1e-4
         self.improved_learning_rate_d = 1e-4
-        self.improved_beta1 = 0.0
+        self.improved_beta1 = 0.5  # 去 SN 后需要动量平滑梯度
         self.improved_beta2 = 0.99
         self.n_critic = 5
         self.lambda_gp = 5.0
