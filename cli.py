@@ -67,6 +67,18 @@ def parse_args():
         "--metric_interval", type=int, default=None, help="FID/IS eval interval, 0 disables"
     )
     parser.add_argument(
+        "--early_stop_patience",
+        type=int,
+        default=None,
+        help="early stop patience in metric evaluations, 0 disables",
+    )
+    parser.add_argument(
+        "--early_stop_min_delta",
+        type=float,
+        default=None,
+        help="minimum FID improvement for early stop",
+    )
+    parser.add_argument(
         "--metric_backend",
         type=str,
         default=None,
@@ -121,6 +133,10 @@ def apply_args_to_config(config, args):
         config.checkpoint_interval = args.checkpoint_interval
     if args.metric_interval is not None:
         config.metric_interval = args.metric_interval
+    if args.early_stop_patience is not None:
+        config.early_stop_patience = args.early_stop_patience
+    if args.early_stop_min_delta is not None:
+        config.early_stop_min_delta = args.early_stop_min_delta
     if args.metric_backend is not None:
         config.metric_backend = args.metric_backend
     if args.use_diff_augment:

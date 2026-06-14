@@ -345,6 +345,13 @@ class GANTrainer:
         if os.path.exists(csv_path):
             os.remove(csv_path)
 
+        best_metric = float("inf")
+        best_epoch = None
+        best_generator_state = None
+        best_generator_ema_state = None
+        stale_evaluations = 0
+        should_stop = False
+
         for epoch in range(1, self.config.epochs + 1):
             summary = self.train_epoch(train_loader, epoch)
             append_csv_row(csv_path, fieldnames, summary)
@@ -372,13 +379,61 @@ class GANTrainer:
                     or epoch == self.config.epochs
                 )
             ):
-                evaluator.evaluate(
+                metrics = evaluator.evaluate(
                     self.get_sampling_generator(),
                     eval_loader,
                     model_name=f"{self.model_name}_epoch_{epoch}",
                 )
+                metric_value = metrics.get(self.config.best_metric_name)
+                if metric_value is not None and np.isfinite(metric_value):
+                    improvement = best_metric - metric_value
+                    if improvement > self.config.early_stop_min_delta:
+                        best_metric = metric_value
+                        best_epoch = epoch
+                        stale_evaluations = 0
+                        best_generator_state = copy.deepcopy(
+                            self.generator.state_dict()
+                        )
+                        if self.generator_ema is not None:
+                            best_generator_ema_state = copy.deepcopy(
+                                self.generator_ema.state_dict()
+                            )
+                        self.save_checkpoint("best")
+                        self.save_samples("best")
+                        print(
+                            f"Best {self.config.best_metric_name} updated at epoch {epoch}: "
+                            f"{best_metric:.4f}"
+                        )
+                    else:
+                        stale_evaluations += 1
+                        print(
+                            f"No {self.config.best_metric_name} improvement for "
+                            f"{stale_evaluations} evaluation(s). Best epoch={best_epoch}, "
+                            f"best={best_metric:.4f}"
+                        )
+                        if (
+                            self.config.early_stop_patience > 0
+                            and stale_evaluations >= self.config.early_stop_patience
+                        ):
+                            print(
+                                f"Early stopping at epoch {epoch}: "
+                                f"{self.config.best_metric_name} did not improve by "
+                                f">{self.config.early_stop_min_delta} for "
+                                f"{self.config.early_stop_patience} evaluations."
+                            )
+                            should_stop = True
+            if should_stop:
+                break
 
         self.plot_training_curves()
+        if best_generator_state is not None:
+            self.generator.load_state_dict(best_generator_state)
+            if self.generator_ema is not None and best_generator_ema_state is not None:
+                self.generator_ema.load_state_dict(best_generator_ema_state)
+            print(
+                f"Restored best checkpoint from epoch {best_epoch} "
+                f"({self.config.best_metric_name}={best_metric:.4f})"
+            )
         self.save_samples("final")
         self.save_checkpoint("final")
         return self.generator_ema if self.generator_ema is not None else self.generator

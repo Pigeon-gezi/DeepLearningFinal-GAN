@@ -66,6 +66,9 @@ class Config:
         self.sample_interval = 1
         self.checkpoint_interval = 5
         self.metric_interval = 5
+        self.best_metric_name = "FID"
+        self.early_stop_patience = 3
+        self.early_stop_min_delta = 2.0
         self.fixed_noise_count = 64
         self.eval_num_images = 1024
         self.eval_batch_size = 32

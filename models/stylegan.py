@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.common import init_weights_dcgan
+from models.common import init_weights_dcgan, MinibatchStdDev
 
 
 class PixelNorm(nn.Module):
@@ -163,28 +163,37 @@ class StyleGANLiteGenerator(nn.Module):
 
         self.constant = nn.Parameter(torch.randn(1, channels[4], 4, 4))
         blocks = []
+        to_rgbs = []
         in_channels = channels[4]
         blocks.append(StyledConvBlock(in_channels, in_channels, w_dim, upsample=False))
+        to_rgbs.append(EqualConv2d(in_channels, image_channels, 1, 1, 0))
         for resolution in resolutions[1:]:
             out_channels = channels[resolution]
             blocks.append(
                 StyledConvBlock(in_channels, out_channels, w_dim, upsample=True)
             )
+            to_rgbs.append(EqualConv2d(out_channels, image_channels, 1, 1, 0))
             in_channels = out_channels
         self.blocks = nn.ModuleList(blocks)
-        self.to_rgb = nn.Sequential(
-            EqualConv2d(in_channels, image_channels, 1, 1, 0),
-            nn.Tanh(),
-        )
+        self.to_rgbs = nn.ModuleList(to_rgbs)
 
     def forward(self, z, return_w=False):
         if z.dim() > 2:
             z = z.view(z.size(0), -1)
         w = self.mapping(z)
         x = self.constant.repeat(z.size(0), 1, 1, 1)
-        for block in self.blocks:
+        image = None
+        for block, to_rgb in zip(self.blocks, self.to_rgbs):
             x = block(x, w)
-        image = self.to_rgb(x)
+            rgb = to_rgb(x)
+            if image is None:
+                image = rgb
+            else:
+                image = F.interpolate(
+                    image, scale_factor=2, mode="bilinear", align_corners=False
+                )
+                image = image + rgb
+        image = torch.tanh(image)
         if return_w:
             return image, w
         return image
@@ -221,7 +230,8 @@ class WGANDiscriminator(nn.Module):
             current_channels = next_channels
 
         self.blocks = nn.ModuleList(blocks)
-        self.final = nn.Conv2d(current_channels, 1, 4, 1, 0)
+        self.minibatch_std = MinibatchStdDev()
+        self.final = nn.Conv2d(current_channels + 1, 1, 4, 1, 0)
         self.apply(init_weights_dcgan)
 
     def forward(self, x, return_features=False):
@@ -229,6 +239,7 @@ class WGANDiscriminator(nn.Module):
         for block in self.blocks:
             x = block(x)
             features.append(x)
+        x = self.minibatch_std(x)
         logits = self.final(x).view(x.size(0), -1).mean(dim=1)
         if return_features:
             return logits, features
