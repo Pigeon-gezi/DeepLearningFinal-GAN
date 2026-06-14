@@ -1,0 +1,9 @@
+{
+  "model": "DCGAN",
+  "metric_backend": "inception",
+  "num_eval_images": 1024,
+  "FID": 34.00894837105753,
+  "Pixel_Diversity": 0.5341378543525934,
+  "Inception_Score_Mean": 2.4828649362665454,
+  "Inception_Score_Std": 0.1720046034802955
+}
