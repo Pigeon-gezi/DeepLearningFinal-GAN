@@ -1,0 +1,9 @@
+{
+  "model": "StyleGAN-lite + WGAN-GP",
+  "metric_backend": "inception",
+  "num_eval_images": 1024,
+  "FID": 80.20618647572816,
+  "Pixel_Diversity": 0.5277540739625692,
+  "Inception_Score_Mean": 2.194347566061097,
+  "Inception_Score_Std": 0.1727660007825907
+}
