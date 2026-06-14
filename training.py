@@ -323,7 +323,7 @@ class GANTrainer:
             self.history[key].append(value)
         return summary
 
-    def train(self, train_loader):
+    def train(self, train_loader, eval_loader=None, evaluator=None):
         print(
             f"开始训练 {self.model_name}，epochs={self.config.epochs}, device={self.device}"
         )
@@ -363,6 +363,20 @@ class GANTrainer:
                 or epoch == self.config.epochs
             ):
                 self.save_checkpoint(epoch)
+            if (
+                eval_loader is not None
+                and evaluator is not None
+                and self.config.metric_interval > 0
+                and (
+                    epoch % self.config.metric_interval == 0
+                    or epoch == self.config.epochs
+                )
+            ):
+                evaluator.evaluate(
+                    self.get_sampling_generator(),
+                    eval_loader,
+                    model_name=f"{self.model_name}_epoch_{epoch}",
+                )
 
         self.plot_training_curves()
         self.save_samples("final")
@@ -374,16 +388,31 @@ class GANTrainer:
             return self.generator_ema
         return self.generator
 
-    def save_samples(self, epoch):
-        generator = self.get_sampling_generator()
+    def _save_samples_for_generator(self, generator, epoch, suffix=""):
+        was_training = generator.training
         generator.eval()
         with torch.no_grad():
             fake_images = generator(self.fixed_noise).detach()
-        filename = f"Samples_{make_safe_filename(self.model_name)}_epoch_{epoch}.png"
+        suffix_part = f"_{suffix}" if suffix else ""
+        filename = (
+            f"Samples_{make_safe_filename(self.model_name)}{suffix_part}_epoch_{epoch}.png"
+        )
         path = os.path.join(self.config.sample_dir, filename)
         save_image_grid(
-            fake_images, path, nrow=8, title=f"{self.model_name} Epoch {epoch}"
+            fake_images,
+            path,
+            nrow=8,
+            title=f"{self.model_name}{suffix_part} Epoch {epoch}",
         )
+        if was_training:
+            generator.train()
+
+    def save_samples(self, epoch):
+        if self.generator_ema is None:
+            self._save_samples_for_generator(self.generator, epoch)
+            return
+        self._save_samples_for_generator(self.generator, epoch, suffix="raw")
+        self._save_samples_for_generator(self.generator_ema, epoch, suffix="ema")
 
     def save_checkpoint(self, epoch):
         checkpoint = {

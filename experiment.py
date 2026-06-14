@@ -82,17 +82,23 @@ class FaceGANExperiment:
             model_name=model_name,
             loss_type=loss_type,
         )
-        trained_generator = trainer.train(train_loader)
-
         evaluator = Evaluator(self.config)
+        eval_loader = None
+        if evaluate:
+            eval_loader = self.data_processor.create_dataloader(
+                shuffle=False, drop_last=False
+            )
+        trained_generator = trainer.train(
+            train_loader,
+            eval_loader=eval_loader,
+            evaluator=evaluator if evaluate else None,
+        )
+
         interpolation_path = evaluator.save_interpolation(
             trained_generator, model_name=model_name
         )
         metrics = {}
         if evaluate:
-            eval_loader = self.data_processor.create_dataloader(
-                shuffle=False, drop_last=False
-            )
             metrics = evaluator.evaluate(
                 trained_generator, eval_loader, model_name=model_name
             )

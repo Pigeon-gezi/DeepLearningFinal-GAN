@@ -58,6 +58,15 @@ def parse_args():
         "--eval_num_images", type=int, default=None, help="FID/IS评估图片数量"
     )
     parser.add_argument(
+        "--sample_interval", type=int, default=None, help="sample save interval"
+    )
+    parser.add_argument(
+        "--checkpoint_interval", type=int, default=None, help="checkpoint save interval"
+    )
+    parser.add_argument(
+        "--metric_interval", type=int, default=None, help="FID/IS eval interval, 0 disables"
+    )
+    parser.add_argument(
         "--metric_backend",
         type=str,
         default=None,
@@ -106,6 +115,12 @@ def apply_args_to_config(config, args):
         config.num_workers = args.num_workers
     if args.eval_num_images is not None:
         config.eval_num_images = args.eval_num_images
+    if args.sample_interval is not None:
+        config.sample_interval = args.sample_interval
+    if args.checkpoint_interval is not None:
+        config.checkpoint_interval = args.checkpoint_interval
+    if args.metric_interval is not None:
+        config.metric_interval = args.metric_interval
     if args.metric_backend is not None:
         config.metric_backend = args.metric_backend
     if args.use_diff_augment:
