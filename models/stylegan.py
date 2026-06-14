@@ -191,7 +191,7 @@ class StyleGANLiteGenerator(nn.Module):
 
 
 class WGANDiscriminator(nn.Module):
-    """WGAN-GP 判別器 — IN + MinibatchStd + 线性输出。"""
+    """WGAN-GP 判別器 — IN + 线性输出。"""
 
     def __init__(self, image_channels=3, base_features=64, image_size=64):
         super(WGANDiscriminator, self).__init__()
@@ -213,7 +213,8 @@ class WGANDiscriminator(nn.Module):
             next_channels = min(base_features * (2 ** (i + 1)), base_features * 16)
             blocks.append(
                 nn.Sequential(
-                    nn.Conv2d(current_channels, next_channels, 4, 2, 1),
+                    nn.Conv2d(current_channels, next_channels, 4, 2, 1, bias=False),
+                    nn.InstanceNorm2d(next_channels),
                     nn.LeakyReLU(0.2, inplace=True),
                 )
             )

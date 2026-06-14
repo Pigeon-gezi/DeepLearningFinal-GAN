@@ -52,10 +52,10 @@ class Config:
         self.improved_learning_rate_d = 1e-4
         self.improved_beta1 = 0.0  # WGAN-GP 原论文: β₁=0 for both G & D
         self.improved_beta2 = 0.9  # WGAN-GP 原论文
-        self.n_critic = 5
+        self.n_critic = 3
         self.lambda_gp = 10.0  # WGAN-GP 原论文默认值，无 SN 时需足够约束
         self.drift_weight = 0.0  # WGAN-GP 原论文无此参数，λ_gp=10 已足够约束
-        self.feature_matching_weight = 0.0
+        self.feature_matching_weight = 0.5
         self.ema_decay = 0.99
         self.use_label_smoothing = True
         self.instance_noise_std = 0.03

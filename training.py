@@ -342,6 +342,8 @@ class GANTrainer:
             self.config.metric_dir,
             f"Train_Log_{make_safe_filename(self.model_name)}.csv",
         )
+        if os.path.exists(csv_path):
+            os.remove(csv_path)
 
         for epoch in range(1, self.config.epochs + 1):
             summary = self.train_epoch(train_loader, epoch)
