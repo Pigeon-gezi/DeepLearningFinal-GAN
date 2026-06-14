@@ -129,13 +129,20 @@ class FaceDataProcessor:
             max_images=self.config.max_images,
             seed=self.config.seed,
         )
-        loader = DataLoader(
-            dataset,
-            batch_size=self.config.batch_size,
-            shuffle=shuffle,
-            num_workers=self.config.num_workers,
-            drop_last=drop_last,
-        )
+        num_workers = self.config.num_workers
+        pin_memory = str(self.config.device).startswith("cuda")
+        loader_kwargs = {
+            "batch_size": self.config.batch_size,
+            "shuffle": shuffle,
+            "num_workers": num_workers,
+            "drop_last": drop_last,
+            "pin_memory": pin_memory,
+        }
+        if num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = 2
+
+        loader = DataLoader(dataset, **loader_kwargs)
         print(
             f"DataLoader创建完成: batch_size={self.config.batch_size}, 批次数={len(loader)}"
         )

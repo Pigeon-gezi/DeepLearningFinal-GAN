@@ -60,6 +60,11 @@ class FaceGANExperiment:
                 base_channels=self.config.style_base_channels,
                 max_channels=self.config.style_max_channels,
                 mapping_layers=self.config.style_mapping_layers,
+                use_noise=self.config.style_use_noise,
+                adain_strength=self.config.style_adain_strength,
+                conv_mode=self.config.style_conv_mode,
+                extra_highres_conv=self.config.style_extra_highres_conv,
+                extra_highres_min_resolution=self.config.style_extra_highres_min_resolution,
             )
             discriminator = WGANDiscriminator(
                 image_channels=self.config.image_channels,

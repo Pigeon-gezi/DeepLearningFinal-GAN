@@ -89,6 +89,43 @@ def parse_args():
         "--use_diff_augment", action="store_true", help="启用轻量DiffAugment"
     )
     parser.add_argument(
+        "--style_use_noise",
+        action="store_true",
+        help="enable StyleGAN generator noise injection",
+    )
+    parser.add_argument(
+        "--style_adain_strength",
+        type=float,
+        default=None,
+        help="AdaIN residual strength for StyleGAN generator",
+    )
+    parser.add_argument(
+        "--style_conv_mode",
+        type=str,
+        default=None,
+        choices=["adain", "modulated"],
+        help="StyleGAN generator conv style: adain or modulated",
+    )
+    parser.add_argument(
+        "--style_extra_highres_conv",
+        dest="style_extra_highres_conv",
+        action="store_true",
+        default=None,
+        help="enable an extra generator conv layer at high resolutions",
+    )
+    parser.add_argument(
+        "--no_style_extra_highres_conv",
+        dest="style_extra_highres_conv",
+        action="store_false",
+        help="disable the extra generator conv layer at high resolutions",
+    )
+    parser.add_argument(
+        "--style_extra_highres_min_resolution",
+        type=int,
+        default=None,
+        help="minimum resolution for the extra high-res generator conv",
+    )
+    parser.add_argument(
         "--n_critic",
         type=int,
         default=None,
@@ -141,6 +178,18 @@ def apply_args_to_config(config, args):
         config.metric_backend = args.metric_backend
     if args.use_diff_augment:
         config.use_diff_augment = True
+    if args.style_use_noise:
+        config.style_use_noise = True
+    if args.style_adain_strength is not None:
+        config.style_adain_strength = args.style_adain_strength
+    if args.style_conv_mode is not None:
+        config.style_conv_mode = args.style_conv_mode
+    if args.style_extra_highres_conv is not None:
+        config.style_extra_highres_conv = args.style_extra_highres_conv
+    if args.style_extra_highres_min_resolution is not None:
+        config.style_extra_highres_min_resolution = (
+            args.style_extra_highres_min_resolution
+        )
     if args.n_critic is not None:
         config.n_critic = args.n_critic
     if args.lr_g is not None:

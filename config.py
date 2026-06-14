@@ -37,6 +37,11 @@ class Config:
         self.style_base_channels = 64
         self.style_max_channels = 512
         self.style_mapping_layers = 4
+        self.style_use_noise = False
+        self.style_adain_strength = 0.5
+        self.style_conv_mode = "modulated"
+        self.style_extra_highres_conv = True
+        self.style_extra_highres_min_resolution = 32
 
         # 基础DCGAN训练设置
         self.epochs = 20
