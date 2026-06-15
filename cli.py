@@ -36,6 +36,12 @@ def parse_args():
         help="evaluate/interpolate模式下加载的检查点",
     )
     parser.add_argument(
+        "--resume_checkpoint",
+        type=str,
+        default=None,
+        help="resume train mode from a full training checkpoint",
+    )
+    parser.add_argument(
         "--model_type",
         type=str,
         default="dcgan",
@@ -150,6 +156,8 @@ def parse_args():
 def apply_args_to_config(config, args):
     if args.data_path is not None:
         config.data_path = args.data_path
+    if args.resume_checkpoint is not None:
+        config.resume_checkpoint = args.resume_checkpoint
     if args.epochs is not None:
         config.epochs = args.epochs
     if args.batch_size is not None:

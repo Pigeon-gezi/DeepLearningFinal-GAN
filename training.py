@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import time
 
@@ -84,10 +85,110 @@ class GANTrainer:
             self.generator_ema = copy.deepcopy(self.generator).to(self.device).eval()
             for param in self.generator_ema.parameters():
                 param.requires_grad_(False)
+        self.resumed_from = None
 
         print(f"\n模型: {model_name}")
         print(f"生成器参数量: {count_trainable_parameters(self.generator):,}")
         print(f"判别器参数量: {count_trainable_parameters(self.discriminator):,}")
+
+    def _move_optimizer_state_to_device(self, optimizer):
+        for state in optimizer.state.values():
+            for key, value in state.items():
+                if torch.is_tensor(value):
+                    state[key] = value.to(self.device)
+
+    def _infer_checkpoint_epoch(self, checkpoint):
+        checkpoint_epoch = checkpoint.get("epoch", 0)
+        if isinstance(checkpoint_epoch, int):
+            return checkpoint_epoch
+        if isinstance(checkpoint_epoch, str) and checkpoint_epoch.isdigit():
+            return int(checkpoint_epoch)
+        history = checkpoint.get("history", {})
+        epochs = history.get("epoch", []) if isinstance(history, dict) else []
+        numeric_epochs = [epoch for epoch in epochs if isinstance(epoch, int)]
+        return max(numeric_epochs) if numeric_epochs else 0
+
+    def load_checkpoint(self, checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        self.generator.load_state_dict(checkpoint["generator_state_dict"])
+        self.discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
+        if "optimizer_g_state_dict" in checkpoint:
+            self.optimizer_g.load_state_dict(checkpoint["optimizer_g_state_dict"])
+            self._move_optimizer_state_to_device(self.optimizer_g)
+        if "optimizer_d_state_dict" in checkpoint:
+            self.optimizer_d.load_state_dict(checkpoint["optimizer_d_state_dict"])
+            self._move_optimizer_state_to_device(self.optimizer_d)
+        if (
+            self.generator_ema is not None
+            and "generator_ema_state_dict" in checkpoint
+        ):
+            self.generator_ema.load_state_dict(checkpoint["generator_ema_state_dict"])
+        if isinstance(checkpoint.get("history"), dict):
+            self.history = checkpoint["history"]
+        self.global_step = checkpoint.get("global_step", self.global_step)
+        self.current_instance_noise = checkpoint.get(
+            "current_instance_noise", self.current_instance_noise
+        )
+        self.resumed_from = checkpoint_path
+        resume_epoch = self._infer_checkpoint_epoch(checkpoint)
+        print(f"Resumed training from {checkpoint_path} at epoch {resume_epoch}")
+        return resume_epoch + 1
+
+    def _load_existing_best_state(self):
+        safe_name = make_safe_filename(self.model_name)
+        best_metric = float("inf")
+        best_epoch = None
+        metric_prefix = f"Metrics_{safe_name}_epoch_"
+        if os.path.isdir(self.config.metric_dir):
+            for filename in os.listdir(self.config.metric_dir):
+                if not filename.startswith(metric_prefix) or not filename.endswith(
+                    ".json"
+                ):
+                    continue
+                metric_path = os.path.join(self.config.metric_dir, filename)
+                try:
+                    with open(metric_path, "r", encoding="utf-8") as handle:
+                        metrics = json.load(handle)
+                except (OSError, json.JSONDecodeError):
+                    continue
+                metric_value = metrics.get(self.config.best_metric_name)
+                if metric_value is None or not np.isfinite(metric_value):
+                    continue
+                if metric_value < best_metric:
+                    best_metric = metric_value
+                    epoch_part = filename[len(metric_prefix) : -len(".json")]
+                    best_epoch = int(epoch_part) if epoch_part.isdigit() else None
+
+        best_generator_state = None
+        best_generator_ema_state = None
+        best_checkpoint_path = os.path.join(
+            self.config.checkpoint_dir, f"Checkpoint_{safe_name}_epoch_best.pth"
+        )
+        if os.path.exists(best_checkpoint_path):
+            try:
+                checkpoint = torch.load(best_checkpoint_path, map_location=self.device)
+                best_generator_state = copy.deepcopy(
+                    checkpoint["generator_state_dict"]
+                )
+                if "generator_ema_state_dict" in checkpoint:
+                    best_generator_ema_state = copy.deepcopy(
+                        checkpoint["generator_ema_state_dict"]
+                    )
+            except (OSError, KeyError, RuntimeError):
+                best_generator_state = None
+                best_generator_ema_state = None
+
+        if np.isfinite(best_metric):
+            print(
+                f"Existing best {self.config.best_metric_name}: "
+                f"{best_metric:.4f} at epoch {best_epoch}"
+            )
+        return (
+            best_metric,
+            best_epoch,
+            best_generator_state,
+            best_generator_ema_state,
+        )
 
     def sample_noise(self, batch_size):
         return torch.randn(batch_size, self.config.latent_dim, device=self.device)
@@ -323,7 +424,9 @@ class GANTrainer:
             self.history[key].append(value)
         return summary
 
-    def train(self, train_loader, eval_loader=None, evaluator=None):
+    def train(
+        self, train_loader, eval_loader=None, evaluator=None, resume_checkpoint=None
+    ):
         print(
             f"开始训练 {self.model_name}，epochs={self.config.epochs}, device={self.device}"
         )
@@ -342,17 +445,33 @@ class GANTrainer:
             self.config.metric_dir,
             f"Train_Log_{make_safe_filename(self.model_name)}.csv",
         )
-        if os.path.exists(csv_path):
+        start_epoch = 1
+        if resume_checkpoint is not None:
+            start_epoch = self.load_checkpoint(resume_checkpoint)
+        if os.path.exists(csv_path) and resume_checkpoint is None:
             os.remove(csv_path)
 
         best_metric = float("inf")
         best_epoch = None
         best_generator_state = None
         best_generator_ema_state = None
+        if resume_checkpoint is not None:
+            (
+                best_metric,
+                best_epoch,
+                best_generator_state,
+                best_generator_ema_state,
+            ) = self._load_existing_best_state()
         stale_evaluations = 0
         should_stop = False
 
-        for epoch in range(1, self.config.epochs + 1):
+        if start_epoch > self.config.epochs:
+            print(
+                f"Resume checkpoint is already at epoch {start_epoch - 1}; "
+                f"target epochs={self.config.epochs}. No training epochs to run."
+            )
+
+        for epoch in range(start_epoch, self.config.epochs + 1):
             summary = self.train_epoch(train_loader, epoch)
             append_csv_row(csv_path, fieldnames, summary)
             print(
@@ -479,10 +598,20 @@ class GANTrainer:
             "optimizer_g_state_dict": self.optimizer_g.state_dict(),
             "optimizer_d_state_dict": self.optimizer_d.state_dict(),
             "history": self.history,
+            "global_step": self.global_step,
+            "current_instance_noise": self.current_instance_noise,
+            "resumed_from": self.resumed_from,
             "config": {
                 "image_size": self.config.image_size,
                 "latent_dim": self.config.latent_dim,
                 "image_channels": self.config.image_channels,
+                "style_conv_mode": getattr(self.config, "style_conv_mode", None),
+                "style_extra_highres_conv": getattr(
+                    self.config, "style_extra_highres_conv", None
+                ),
+                "style_extra_highres_min_resolution": getattr(
+                    self.config, "style_extra_highres_min_resolution", None
+                ),
             },
         }
         if self.generator_ema is not None:

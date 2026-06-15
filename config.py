@@ -19,6 +19,7 @@ class Config:
         self.checkpoint_dir = ensure_dir(os.path.join(script_dir, "checkpoints"))
         self.sample_dir = ensure_dir(os.path.join(script_dir, "samples"))
         self.metric_dir = ensure_dir(os.path.join(script_dir, "metrics"))
+        self.resume_checkpoint = None
 
         # 数据设置
         self.image_size = 64

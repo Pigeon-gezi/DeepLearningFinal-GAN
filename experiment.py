@@ -97,6 +97,7 @@ class FaceGANExperiment:
             train_loader,
             eval_loader=eval_loader,
             evaluator=evaluator if evaluate else None,
+            resume_checkpoint=self.config.resume_checkpoint,
         )
 
         interpolation_path = evaluator.save_interpolation(
