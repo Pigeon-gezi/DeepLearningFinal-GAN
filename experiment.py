@@ -71,7 +71,11 @@ class FaceGANExperiment:
                 base_features=self.config.dcgan_d_features,
                 image_size=self.config.image_size,
             )
-            return generator, discriminator, "StyleGAN-lite + WGAN-GP", "wgan-gp"
+            if self.config.improved_loss_type == "wgan-gp":
+                model_name = "StyleGAN-lite + WGAN-GP"
+            else:
+                model_name = "StyleGAN-lite + Logistic-R1"
+            return generator, discriminator, model_name, self.config.improved_loss_type
 
         raise ValueError(f"未知模型类型: {model_type}")
 

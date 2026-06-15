@@ -132,6 +132,25 @@ def parse_args():
         help="minimum resolution for the extra high-res generator conv",
     )
     parser.add_argument(
+        "--improved_loss_type",
+        type=str,
+        default=None,
+        choices=["wgan-gp", "logistic-r1"],
+        help="loss for improved StyleGAN-lite model",
+    )
+    parser.add_argument(
+        "--r1_gamma",
+        type=float,
+        default=None,
+        help="R1 regularization weight for logistic-r1 loss",
+    )
+    parser.add_argument(
+        "--r1_interval",
+        type=int,
+        default=None,
+        help="lazy R1 interval for logistic-r1 loss",
+    )
+    parser.add_argument(
         "--n_critic",
         type=int,
         default=None,
@@ -198,6 +217,12 @@ def apply_args_to_config(config, args):
         config.style_extra_highres_min_resolution = (
             args.style_extra_highres_min_resolution
         )
+    if args.improved_loss_type is not None:
+        config.improved_loss_type = args.improved_loss_type
+    if args.r1_gamma is not None:
+        config.r1_gamma = args.r1_gamma
+    if args.r1_interval is not None:
+        config.r1_interval = args.r1_interval
     if args.n_critic is not None:
         config.n_critic = args.n_critic
     if args.lr_g is not None:

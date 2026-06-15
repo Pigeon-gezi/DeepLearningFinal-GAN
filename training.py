@@ -38,7 +38,7 @@ class GANTrainer:
         self.model_name = model_name
         self.loss_type = loss_type
 
-        if loss_type == "wgan-gp":
+        if loss_type in ["wgan-gp", "logistic-r1"]:
             lr_g = config.improved_learning_rate_g
             lr_d = config.improved_learning_rate_d
             beta1 = config.improved_beta1
@@ -81,7 +81,7 @@ class GANTrainer:
         }
 
         self.generator_ema = None
-        if loss_type == "wgan-gp" and config.ema_decay > 0:
+        if loss_type in ["wgan-gp", "logistic-r1"] and config.ema_decay > 0:
             self.generator_ema = copy.deepcopy(self.generator).to(self.device).eval()
             for param in self.generator_ema.parameters():
                 param.requires_grad_(False)
@@ -208,7 +208,7 @@ class GANTrainer:
                 ema_buffer.copy_(buffer)
 
     def _prepare_for_discriminator(self, images):
-        if self.loss_type != "wgan-gp" and self.current_instance_noise > 0:
+        if self.loss_type == "bce" and self.current_instance_noise > 0:
             images = add_instance_noise(images, self.current_instance_noise)
         if self.config.use_diff_augment:
             images = diff_augment(images)
@@ -343,6 +343,83 @@ class GANTrainer:
         diversity = fake_images.detach().std(dim=0).mean().item()
         return g_loss.item(), feature_matching.item(), diversity
 
+    def logistic_d_loss(self, real_logits, fake_logits, r1_penalty=0.0):
+        return F.softplus(fake_logits).mean() + F.softplus(-real_logits).mean() + r1_penalty
+
+    def logistic_g_loss(self, fake_logits):
+        return F.softplus(-fake_logits).mean()
+
+    def r1_regularization(self, real_images):
+        real_images = real_images.detach().requires_grad_(True)
+        real_logits = self.discriminator(self._prepare_for_discriminator(real_images))
+        r1_grads = grad(
+            outputs=real_logits.sum(),
+            inputs=real_images,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        r1_penalty = r1_grads.pow(2).reshape(real_images.size(0), -1).sum(dim=1)
+        return r1_penalty.mean(), real_logits.detach().mean().item()
+
+    def train_discriminator_logistic_r1(self, real_images):
+        batch_size = real_images.size(0)
+        self.optimizer_d.zero_grad()
+
+        real_input = self._prepare_for_discriminator(real_images)
+        real_input = real_input.detach().requires_grad_(True)
+        real_logits = self.discriminator(real_input)
+
+        with torch.no_grad():
+            fake_images = self.generator(self.sample_noise(batch_size))
+        fake_input = self._prepare_for_discriminator(fake_images)
+        fake_logits = self.discriminator(fake_input)
+
+        r1_penalty_value = torch.tensor(0.0, device=self.device)
+        r1_interval = max(1, self.config.r1_interval)
+        if self.global_step % r1_interval == 0:
+            r1_grads = grad(
+                outputs=real_logits.sum(),
+                inputs=real_input,
+                create_graph=True,
+                retain_graph=True,
+                only_inputs=True,
+            )[0]
+            r1_penalty_value = r1_grads.pow(2).reshape(batch_size, -1).sum(dim=1).mean()
+
+        d_loss = self.logistic_d_loss(
+            real_logits,
+            fake_logits,
+            r1_penalty=self.config.r1_gamma
+            * 0.5
+            * r1_penalty_value
+            * r1_interval,
+        )
+
+        d_loss.backward()
+        self.optimizer_d.step()
+
+        return (
+            d_loss.item(),
+            real_logits.detach().mean().item(),
+            fake_logits.detach().mean().item(),
+            r1_penalty_value.item(),
+        )
+
+    def train_generator_logistic_r1(self, real_images):
+        batch_size = real_images.size(0)
+        self.optimizer_g.zero_grad()
+        fake_images = self.generator(self.sample_noise(batch_size))
+        fake_logits = self.discriminator(self._prepare_for_discriminator(fake_images))
+        g_loss = self.logistic_g_loss(fake_logits)
+        feature_matching = torch.tensor(0.0, device=self.device)
+
+        g_loss.backward()
+        self.optimizer_g.step()
+        self.update_ema()
+        diversity = fake_images.detach().std(dim=0).mean().item()
+        return g_loss.item(), feature_matching.item(), diversity
+
     def train_epoch(self, train_loader, epoch):
         start_time = time.time()
         self.generator.train()
@@ -372,6 +449,16 @@ class GANTrainer:
                     epoch_g_losses.append(g_loss)
                     epoch_feature_matching.append(feature_matching)
                     epoch_diversity.append(diversity)
+            elif self.loss_type == "logistic-r1":
+                d_loss, d_real, d_fake, gp_value = (
+                    self.train_discriminator_logistic_r1(real_images)
+                )
+                g_loss, feature_matching, diversity = (
+                    self.train_generator_logistic_r1(real_images)
+                )
+                epoch_g_losses.append(g_loss)
+                epoch_feature_matching.append(feature_matching)
+                epoch_diversity.append(diversity)
             else:
                 d_loss, d_real, d_fake, gp_value = self.train_discriminator_bce(
                     real_images

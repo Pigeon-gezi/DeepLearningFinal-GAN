@@ -41,7 +41,7 @@ class Config:
         self.style_use_noise = False
         self.style_adain_strength = 0.5
         self.style_conv_mode = "modulated"
-        self.style_extra_highres_conv = True
+        self.style_extra_highres_conv = False
         self.style_extra_highres_min_resolution = 32
 
         # 基础DCGAN训练设置
@@ -59,6 +59,9 @@ class Config:
         self.improved_beta1 = 0.0  # WGAN-GP 原论文: β₁=0 for both G & D
         self.improved_beta2 = 0.9  # WGAN-GP 原论文
         self.n_critic = 3
+        self.improved_loss_type = "logistic-r1"
+        self.r1_gamma = 10.0
+        self.r1_interval = 16
         self.lambda_gp = 10.0  # WGAN-GP 原论文默认值，无 SN 时需足够约束
         self.drift_weight = 0.0  # WGAN-GP 原论文无此参数，λ_gp=10 已足够约束
         self.feature_matching_weight = 0.5
